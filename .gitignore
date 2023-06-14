@@ -48,3 +48,19 @@ Thumbs.db
 *.mov
 *.wmv
 
+# Files that I don't want to track
+data/.gene_list.txt.swp
+data/All_MYB_occupied_genes_stitchit-and-homer_combined.txt
+data/All_MYB_occupied_genes_stitchit-and-homer_combined_sorted.txt
+data/geneList_2KR_Down.txt
+data/geneList_2KR_Up.txt
+data/gene_list.txt
+data/gene_list_explore.txt
+data/gene_list_sorted.txt
+data/gene_list_sorted_explore.txt
+results/.snakemake/
+results/BRCA-US/
+results/COAD-US/
+results/LAML-US/
+results/Rplots.pdf
+results/Snakefile_explore.smk

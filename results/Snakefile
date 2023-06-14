@@ -1,0 +1,139 @@
+DATA = '../data'
+RAW = '/storage/mathelierarea/raw/ICGC'
+BIN = '../bin'
+
+ICGC_PROJECTS = ['LAML-US', 'BRCA-US', 'COAD-US']
+
+ICGC_FILES = {
+    'LAML-US' : {
+        'dir' : '{0}/20171122_ICGC_blood_EXP-S_METH-A'.format(RAW),
+        'meth' : '{0}/20171122_ICGC_blood_EXP-S_METH-A/meth_array.tsv'.format(RAW),
+        'expr' : '{0}/20171122_ICGC_blood_EXP-S_METH-A/exp_seq.tsv'.format(RAW),
+        'specimen': '{0}/20171122_ICGC_blood_EXP-S_METH-A/specimen.tsv'.format(RAW)
+    },
+    'BRCA-US' : {
+        'dir' : '{0}/20170808_ICGC_breast_EXP-S_METH-A'.format(RAW),
+        'meth' : '{0}/20170808_ICGC_breast_EXP-S_METH-A/meth_array.tsv'.format(RAW),
+        'expr' : '{0}/20170808_ICGC_breast_EXP-S_METH-A/exp_seq.tsv'.format(RAW),
+        'specimen' : '{0}/20170808_ICGC_breast_EXP-S_METH-A/specimen.tsv'.format(RAW)
+    },
+    'COAD-US' : {
+        'dir' : '{0}/20171113_ICGC_colorectal_EXP-S_METH-A'.format(RAW),
+        'meth' : '{0}/20171113_ICGC_colorectal_EXP-S_METH-A/meth_array.tsv'.format(RAW),
+        'expr' : '{0}/20171113_ICGC_colorectal_EXP-S_METH-A/exp_seq.tsv'.format(RAW),
+        'specimen' : '{0}/20171113_ICGC_colorectal_EXP-S_METH-A/specimen.tsv'.format(RAW)
+    }
+}
+
+
+rule all:
+    input:
+        expand("{project}/{project}_gene_exp_seq.perDonor.tsv",
+                project=ICGC_PROJECTS),
+        expand("{project}/{project}_up_cor.test_Targetgene_expr.vs.MYB.tsv",
+                project=ICGC_PROJECTS),
+	expand("{project}/{project}_down_cor.test_Targetgene_expr.vs.MYB.tsv",
+                project=ICGC_PROJECTS),
+	expand("{project}/{project}_up_cor.test_Targetgene_expr.vs.MYB_directTarget.tsv",
+		project=ICGC_PROJECTS)
+
+
+##### Retrieve expression data
+
+rule expr_data:
+    input:
+        lambda wildcards: ICGC_FILES[wildcards.project]['expr']
+    output:
+        temp("{project}/{project}_exp_seq.tsv")
+    shell:
+        """
+        mkdir -p {wildcards.project};
+        awk '{{if($2=="{wildcards.project}") print $0}}' {input} > {output};
+        """
+
+rule gene_expr_Up:
+    input:
+        expr = "{project}/{project}_exp_seq.tsv",
+        gene_list_Up = "{0}/geneList_2KR_Up_sorted.txt".format(DATA),
+    output:
+        temp("{project}/{project}_gene_exp_seq_up.tsv")
+    shell:
+	    """
+        tmpfile=$(mktemp);
+        LANG=en_EN sort -k8 {input.expr} > $tmpfile;
+        LANG=en_EN join -1 1 -2 8 {input.gene_list_Up} $tmpfile > {output};
+        rm $tmpfile;
+        """
+rule gene_expr_Down:
+    input:
+        expr = "{project}/{project}_exp_seq.tsv",
+        gene_list_Down = "{0}/geneList_2KR_Down_sorted.txt".format(DATA)
+    output:
+        temp("{project}/{project}_gene_exp_seq_down.tsv")
+    shell:
+        """  
+        tmpfile=$(mktemp);
+        LANG=en_EN sort -k8 {input.expr} > $tmpfile;
+        LANG=en_EN join -1 1 -2 8 {input.gene_list_Down} $tmpfile > {output};
+        rm $tmpfile;
+        """
+
+##### Reformat expression data per donor
+
+rule expression_gene_perDonor:
+    input:
+      expr_up = "{project}/{project}_gene_exp_seq_up.tsv",
+      expr_down = "{project}/{project}_gene_exp_seq_down.tsv",
+      spec = lambda wildcards: ICGC_FILES[wildcards.project]['specimen']
+    output:
+      expr_up= "{project}/{project}_gene_exp_seq.perDonor_up.tsv",
+      expr_down= "{project}/{project}_gene_exp_seq.perDonor_down.tsv"
+    shell:
+        """
+        python {BIN}/reformat_expression.py -e {input.expr_up} -E {output.expr_up}\
+            -s {input.spec};
+        python {BIN}/reformat_expression.py -e {input.expr_down} -E {output.expr_down}\
+            -s {input.spec};
+        """
+
+##### compute pearson corr of MYB expr vs Target gene expr
+
+rule correlate_TargetGene_vs_MYB_expr:
+    input:
+        expr_file_up= "{project}/{project}_gene_exp_seq.perDonor_up.tsv",
+        expr_file_down= "{project}/{project}_gene_exp_seq.perDonor_down.tsv"
+    output:
+        corr_up="{project}/{project}_up_cor.test_Targetgene_expr.vs.MYB.tsv",
+        corr_down="{project}/{project}_down_cor.test_Targetgene_expr.vs.MYB.tsv"
+    params:
+        outbase_up="{project}/{project}_up",
+        outbase_down="{project}/{project}_down",
+        corrGenes_up= "{0}/geneList_2KR_Up_sorted.txt".format(DATA),
+        corrGenes_down= "{0}/geneList_2KR_Down_sorted.txt".format(DATA)
+    shell:
+        """
+        R --silent --slave --vanilla -f {BIN}/compute_MYB_target_genes_expr_correlations_with_cor.test_table_output.R \
+            --args {input.expr_file_up} {params.outbase_up} {wildcards.project} {params.corrGenes_up};
+	R --silent --slave --vanilla -f {BIN}/compute_MYB_target_genes_expr_correlations_with_cor.test_table_output.R \
+            --args {input.expr_file_down} {params.outbase_down} {wildcards.project} {params.corrGenes_down};
+        """
+
+rule overlap_TargetGene_MYB_corr:
+    input:
+        corr_up="{project}/{project}_up_cor.test_Targetgene_expr.vs.MYB.tsv",
+        corr_down="{project}/{project}_down_cor.test_Targetgene_expr.vs.MYB.tsv",
+        myb_direct_genes="{0}/All_MYB_occupied_genes_stitchit-and-homer_combined_sorted.txt".format(DATA)
+    output:
+        corr_up="{project}/{project}_up_cor.test_Targetgene_expr.vs.MYB_directTarget.tsv",
+        corr_down="{project}/{project}_down_cor.test_Targetgene_expr.vs.MYB_directTarget.tsv"
+    shell:
+        """
+        tmpfile_up=$(mktemp);
+        tmpfile_down=$(mktemp);
+        LANG=en_EN sort -k1 {input.corr_up} > $tmpfile_up;
+        LANG=en_EN sort -k1 {input.corr_down} > $tmpfile_down;
+        LANG=en_EN join -1 1 -2 1 $tmpfile_up {input.corr_up} > {output.corr_up};
+        LANG=en_EN join -1 1 -2 1 $tmpfile_down {input.corr_down} > {output.corr_down};
+        rm $tmpfile_up;
+	rm $tmpfile_down;
+        """
