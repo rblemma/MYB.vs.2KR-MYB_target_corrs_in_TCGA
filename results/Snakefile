@@ -29,13 +29,13 @@ ICGC_FILES = {
 rule all:
     input:
         expand("{project}/{project}_gene_exp_seq.perDonor.tsv",
-                project=ICGC_PROJECTS),
+            project=ICGC_PROJECTS),
         expand("{project}/{project}_up_cor.test_Targetgene_expr.vs.MYB.tsv",
-                project=ICGC_PROJECTS),
-	expand("{project}/{project}_down_cor.test_Targetgene_expr.vs.MYB.tsv",
-                project=ICGC_PROJECTS),
-	expand("{project}/{project}_up_cor.test_Targetgene_expr.vs.MYB_directTarget.tsv",
-		project=ICGC_PROJECTS)
+            project=ICGC_PROJECTS),
+        expand("{project}/{project}_down_cor.test_Targetgene_expr.vs.MYB.tsv",
+            project=ICGC_PROJECTS),
+        expand("{project}/{project}_up_cor.test_Targetgene_expr.vs.MYB_directTarget.tsv",
+            project=ICGC_PROJECTS)
 
 
 ##### Retrieve expression data
@@ -71,7 +71,7 @@ rule gene_expr_Down:
     output:
         temp("{project}/{project}_gene_exp_seq_down.tsv")
     shell:
-        """  
+        """
         tmpfile=$(mktemp);
         LANG=en_EN sort -k8 {input.expr} > $tmpfile;
         LANG=en_EN join -1 1 -2 8 {input.gene_list_Down} $tmpfile > {output};
@@ -114,7 +114,7 @@ rule correlate_TargetGene_vs_MYB_expr:
         """
         R --silent --slave --vanilla -f {BIN}/compute_MYB_target_genes_expr_correlations_with_cor.test_table_output.R \
             --args {input.expr_file_up} {params.outbase_up} {wildcards.project} {params.corrGenes_up};
-	R --silent --slave --vanilla -f {BIN}/compute_MYB_target_genes_expr_correlations_with_cor.test_table_output.R \
+        R --silent --slave --vanilla -f {BIN}/compute_MYB_target_genes_expr_correlations_with_cor.test_table_output.R \
             --args {input.expr_file_down} {params.outbase_down} {wildcards.project} {params.corrGenes_down};
         """
 
@@ -135,5 +135,5 @@ rule overlap_TargetGene_MYB_corr:
         LANG=en_EN join -1 1 -2 1 $tmpfile_up {input.corr_up} > {output.corr_up};
         LANG=en_EN join -1 1 -2 1 $tmpfile_down {input.corr_down} > {output.corr_down};
         rm $tmpfile_up;
-	rm $tmpfile_down;
+        rm $tmpfile_down;
         """
